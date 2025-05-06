@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Game 2D RPG Có Camera Theo Nhân Vật</title>
+<style>
+  html, body {
+    margin: 0; padding: 0;
+    width: 100vw; height: 100vh;
+    background: linear-gradient(120deg, #1e3c72, #2a5298);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  body {
+    overflow: hidden;
+  }
+  #loginContainer {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(15, 32, 64,0.9);
+    border-radius: 12px;
+    padding: 40px 30px;
+    width: 320px;
+    box-sizing: border-box;
+    color: white;
+    text-align: center;
+    box-shadow: 0 6px 15px rgba(0,0,0,0.8);
+  }
+  #loginContainer h2 {
+    margin-bottom: 20px;
+    font-weight: 700;
+    text-shadow: 1px 1px 4px rgba(0,0,0,0.7);
+  }
+  #usernameInput {
+    width: 80%;
+    padding: 10px;
+    font-size: 1.1em;
+    border-radius: 8px;
+    border: none;
+    margin-bottom: 20px;
+    outline: none;
+    text-align: center;
+  }
+  #loginBtn {
+    width: 85%;
+    padding: 12px;
+    font-size: 1.2em;
+    background: #6C63FF;
+    border: none;
+    border-radius: 30px;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(108, 99, 255, 0.7);
+    transition: background-color 0.3s ease;
+  }
+  #loginBtn:hover:not(:disabled) {
+    background: #574CE6;
+  }
+  #loginBtn:disabled {
+    background: #999;
+    cursor: default;
+  }
+  #gameContainer {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+  }
+  #gameCanvas {
+    background-color: #0b2344;
+    border-radius: 12px;
+    box-shadow: 0 6px 12px rgba(0,0,0,0.7);
+    width: 320px;
+    height: 560px;
+    touch-action: none;
+    user-select: none;
+  }
+  #controls {
+    margin-top: 12px;
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+  }
+  .control-btn {
+    background: #6C63FF;
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    color: white;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(108, 99, 255, 0.7);
+    user-select: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    transition: background-color 0.3s ease;
+  }
+  .control-btn:active {
+    background: #483ecf;
+  }
+  #welcomeMsg {
+    color: #eee;
+    font-weight: 600;
+    margin-bottom: 8px;
+    font-size: 1.1em;
+    text-align: center;
+    user-select: none;
+    text-shadow: 1px 1px 3px rgba(0,0,0,0.6);
+  }
+  #changeMapBtn {
+    margin-top: 15px;
+    padding: 10px 22px;
+    font-size: 1em;
+    border-radius: 25px;
+    background: #e76f51;
+    color: white;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(231, 111, 81, 0.7);
+    transition: background-color 0.3s ease;
+  }
+  #changeMapBtn:hover {
+    background: #d4573c;
+  }
+  @media (max-width: 400px) {
+    #gameCanvas {
+      width: 90vw;
+      height: calc((560 / 320) * 90vw);
+    }
+    #loginContainer {
+      width: 90vw;
+      padding: 30px 20px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div id="loginContainer" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+  <h2 id="loginTitle">Đăng nhập để chơi</h2>
+  <input
+    type="text"
+    id="usernameInput"
+    placeholder="Nhập tên bạn"
+    aria-label="Nhập tên người chơi"
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="none"
+    spellcheck="false"
+  />
+  <br />
+  <button id="loginBtn" disabled>Đăng nhập</button>
+</div>
+
+<div id="gameContainer" role="main" aria-label="Khu vực Game">
+  <div id="welcomeMsg"></div>
+  <canvas id="gameCanvas" width="320" height="560" aria-label="Canvas game 2D RPG"></canvas>
+  <div id="controls" aria-label="Bảng điều khiển ảo">
+    <button class="control-btn" aria-label="Di chuyển lên" data-dir="up">↑</button>
+    <button class="control-btn" aria-label="Di chuyển trái" data-dir="left">←</button>
+    <button class="control-btn" aria-label="Di chuyển xuống" data-dir="down">↓</button>
+    <button class="control-btn" aria-label="Di chuyển phải" data-dir="right">→</button>
+  </div>
+  <button id="changeMapBtn" aria-label="Chuyển bản đồ">Chuyển Bản Đồ</button>
+</div>
+
+<script type="module">
+class Player {
+  constructor(x, y, width, height) {
+    this.x = x;
+    this.y = y;
+    this.width = width;
+    this.height = height;
+    this.color = '#f4a261';
+    this.speed = 2;
+  }
+
+  draw(ctx, cameraX, cameraY) {
+    ctx.fillStyle = this.color;
+    ctx.fillRect(this.x - cameraX, this.y - cameraY, this.width, this.height);
+  }
+
+  move(dx, dy, map) {
+    let newX = this.x + dx;
+    let newY = this.y + dy;
+    if(!map.isCollision(newX, this.y, this.width, this.height)) {
+      this.x = newX;
+    }
+    if(!map.isCollision(this.x, newY, this.width, this.height)) {
+      this.y = newY;
+    }
+  }
+}
+
+class Map {
+  constructor(tileSize) {
+    this.tileSize = tileSize;
+    this.maps = [
+      [
+        [1,1,1,1,1,1,1,1,1,1],
+        [1,0,0,0,0,0,0,0,0,1],
+        [1,0,1,1,0,1,1,0,0,1],
+        [1,0,1,0,0,0,1,0,0,1],
+        [1,0,1,0,1,0,1,1,0,1],
+        [1,0,0,0,1,0,0,0,0,1],
+        [1,0,1,0,1,1,1,1,0,1],
+        [1,0,1,0,0,0,0,1,0,1],
+        [1,0,0,0,1,1,0,0,0,1],
+        [1,1,1,1,1,1,1,1,1,1],
+        [1,0,0,0,0,0,0,0,0,1],
+        [1,1,1,1,1,1,1,1,1,1],
+        [1,0,0,0,0,0,0,0,0,1],
+        [1,0,1,1,1,1,1,1,0,1],
+        [1,1,1,1,1,1,1,1,1,1],
+      ],
+      [
+        [1,1,1,1,1,1,1,1,1,1],
+        [1,0,1,0,0,0,0,1,0,1],
+        [1,0,1,0,1,1,0,1,0,1],
+        [1,0,0,0,1,0,0,0,0,1],
+        [1,0,1,1,1,0,1,1,0,1],
+        [1,0,0,0,0,0,0,1,0,1],
+        [1,1,1,1,1,1,0,1,0,1],
+        [1,0,0,0,0,1,0,1,0,1],
+        [1,0,1,1,0,1,0,0,0,1],
+        [1,0,0,1,0,1,1,1,0,1],
+        [1,0,0,0,0,0,0,0,0,1],
+        [1,1,1,1,1,1,1,1,1,1],
+        [1,0,0,0,0,0,0,0,0,1],
+        [1,1,1,1,1,1,1,1,1,1],
+        [1,1,1,1,1,1,1,1,1,1],
+      ]
+    ];
+    this.currentMapIndex = 0;
+    this.data = this.maps[this.currentMapIndex];
+    this.rows = this.data.length;
+    this.cols = this.data[0].length;
+  }
+
+  draw(ctx, cameraX, cameraY, canvasWidth, canvasHeight) {
+    // Vẽ tiles trong camera nhìn thấy
+    const startCol = Math.floor(cameraX / this.tileSize);
+    const endCol = Math.min(this.cols, Math.ceil((cameraX + canvasWidth) / this.tileSize));
+    const startRow = Math.floor(cameraY / this.tileSize);
+    const endRow = Math.min(this.rows, Math.ceil((cameraY + canvasHeight) / this.tileSize));
+
+    for(let r = startRow; r < endRow; r++) {
+      for(let c = startCol; c < endCol; c++) {
+        if(this.data[r][c] === 1) {
+          ctx.fillStyle = '#264653';
+        } else {
+          ctx.fillStyle = '#2a9d8f';
+        }
+        const screenX = c * this.tileSize - cameraX;
+        const screenY = r * this.tileSize - cameraY;
+        ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
+      }
+    }
+  }
+
+  isCollision(x, y, width, height) {
+    const leftCol = Math.floor(x / this.tileSize);
+    const rightCol = Math.floor((x + width) / this.tileSize);
+    const topRow = Math.floor(y / this.tileSize);
+    const bottomRow = Math.floor((y + height) / this.tileSize);
+    if(leftCol < 0 || rightCol >= this.cols || topRow < 0 || bottomRow >= this.rows) return true;
+    for(let row = topRow; row <= bottomRow; row++) {
+      for(let col = leftCol; col <= rightCol; col++) {
+        if(this.data[row][col] === 1) return true;
+      }
+    }
+    return false;
+  }
+
+  changeMap() {
+    this.currentMapIndex = (this.currentMapIndex + 1) % this.maps.length;
+    this.data = this.maps[this.currentMapIndex];
+    this.rows = this.data.length;
+    this.cols = this.data[0].length;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const loginContainer = document.getElementById('loginContainer');
+  const usernameInput = document.getElementById('usernameInput');
+  const loginBtn = document.getElementById('loginBtn');
+  const gameContainer = document.getElementById('gameContainer');
+  const welcomeMsg = document.getElementById('welcomeMsg');
+  const changeMapBtn = document.getElementById('changeMapBtn');
+
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const tileSize = 32;
+  const canvasWidth = canvas.width;
+  const canvasHeight = canvas.height;
+
+  let player = null;
+  let map = null;
+  let keysPressed = {};
+
+  let cameraX = 0;
+  let cameraY = 0;
+
+  usernameInput.addEventListener('input', () => {
+    loginBtn.disabled = usernameInput.value.trim().length === 0;
+  });
+
+  loginBtn.addEventListener('click', () => {
+    const username = usernameInput.value.trim();
+    if(username.length === 0) return;
+
+    loginContainer.style.display = 'none';
+    gameContainer.style.display = 'flex';
+    welcomeMsg.textContent = `Chào mừng, ${username}! Dùng bàn phím hoặc nút dưới đây để di chuyển.`;
+
+    startGame();
+  });
+
+  changeMapBtn.addEventListener('click', () => {
+    if(map) {
+      map.changeMap();
+      // Đặt lại vị trí player về vị trí khởi đầu cho map mới
+      player.x = tileSize * 5;
+      player.y = tileSize * 7;
+    }
+  });
+
+  function startGame() {
+    map = new Map(tileSize);
+    player = new Player(tileSize * 5, tileSize * 7, tileSize - 4, tileSize - 4);
+
+    window.addEventListener('keydown', (e) => {
+      keysPressed[e.key.toLowerCase()] = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+      keysPressed[e.key.toLowerCase()] = false;
+    });
+
+    const controls = document.querySelectorAll('#controls .control-btn');
+    controls.forEach(btn => {
+      btn.addEventListener('touchstart', () => {
+        keysPressed[btn.dataset.dir] = true;
+      });
+      btn.addEventListener('touchend', () => {
+        keysPressed[btn.dataset.dir] = false;
+      });
+      btn.addEventListener('mousedown', () => {
+        keysPressed[btn.dataset.dir] = true;
+      });
+      btn.addEventListener('mouseup', () => {
+        keysPressed[btn.dataset.dir] = false;
+      });
+      btn.addEventListener('mouseleave', () => {
+        keysPressed[btn.dataset.dir] = false;
+      });
+    });
+
+    gameLoop();
+  }
+
+  function updateCamera() {
+    // Camera giữ nhân vật gần trung tâm canvas
+    cameraX = player.x + player.width/2 - canvasWidth/2;
+    cameraY = player.y + player.height/2 - canvasHeight/2;
+    // Giới hạn camera không vượt ngoài map
+    cameraX = Math.max(0, Math.min(cameraX, map.cols * tileSize - canvasWidth));
+    cameraY = Math.max(0, Math.min(cameraY, map.rows * tileSize - canvasHeight));
+  }
+
+  function update() {
+    let dx = 0, dy = 0;
+    if(keysPressed['arrowup'] || keysPressed['w'] || keysPressed['up']) dy -= player.speed;
+    if(keysPressed['arrowdown'] || keysPressed['s'] || keysPressed['down']) dy += player.speed;
+    if(keysPressed['arrowleft'] || keysPressed['a'] || keysPressed['left']) dx -= player.speed;
+    if(keysPressed['arrowright'] || keysPressed['d'] || keysPressed['right']) dx += player.speed;
+
+    player.move(dx, dy, map);
+    updateCamera();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    map.draw(ctx, cameraX, cameraY, canvasWidth, canvasHeight);
+    player.draw(ctx, cameraX, cameraY);
+  }
+
+  function gameLoop() {
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+  }
+});
+</script>
+</body>
+</html>
